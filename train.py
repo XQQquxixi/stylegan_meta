@@ -1,6 +1,5 @@
 import os
 import argparse
-from dataloaders.setup_dataloader_smallgan import setup_dataloader
 import tensorflow as tf
 from loss.Loss import LossModel
 import pickle
