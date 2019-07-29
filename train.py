@@ -107,7 +107,7 @@ def main():
     parser.add_argument('--randomize_noise', default=False, help='Add noise to dlatents during optimization', type=bool)
     args, other_args = parser.parse_known_args()
 
-    ref_images = [os.path.join('../stylegan_meta/data/anime', x) for x in os.listdir('../stylegan_meta/data/anime')]
+    ref_images = [os.path.join('./data/anime', x) for x in os.listdir('./data/anime')]
     ref_images = list(filter(os.path.isfile, ref_images))
 
     print("number of example: {0}".format(len(ref_images)))
