@@ -6,40 +6,20 @@ import PIL.Image
 import numpy as np
 import dnnlib.tflib as tflib
 from encoder.generator_model import Generator
-from encoder.perceptual_model import PerceptualModel
 import tensorflow as tf
 import random
 from scipy.stats import truncnorm
 import datetime
+from tensorflow.keras.models import Model
+from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
+from tensorflow.keras.preprocessing import image
 
 def split_to_batches(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
 
-def make_mask(bs, n):
-    """
-    make a bs x n index matrix
-    """
-    mask = []
-    weight = []
-    for i in range(bs):
-        a = list(map(int, bs * np.random.uniform(0, 1, (n, 1))))
-        a.sort()
-        b = list(map(float, bs * np.random.uniform(0, 1, (n, 1))))
-        b_sum = sum(b)
-        b = [x / b_sum for x in b]
-        mask.append(a)
-        weight.append(b)
-    mask = np.vstack(mask)
-    weight = np.vstack(weight)
-    return mask, weight
-
-
 def interpolate(dlatents, depth, bs):
-    """
-    interpolate the dlatents depth many times
-    """
     res = []
     t = list(dlatents)
 
@@ -62,7 +42,7 @@ def interpolate(dlatents, depth, bs):
 
 
 def combine(im_list, path):
-    """combine images """
+    # images = map(PIL.Image.open, im_list)
     widths, heights = zip(*(i.size for i in im_list))
 
     total_width = sum(widths)
@@ -79,7 +59,6 @@ def combine(im_list, path):
 
 
 def interpolation(dlatent1, dlatent2):
-    """interpolate between two images (6)"""
     dlatents = [dlatent2]
     x = 0
     for i in range(4):
@@ -87,6 +66,26 @@ def interpolation(dlatent1, dlatent2):
         dlatents.append(dlatent1 * x + (1 - x) * dlatent2)
     dlatents.append(dlatent1)
     return dlatents
+
+
+def load_images(images_list, img_size):
+    loaded_images = list()
+    for img_path in images_list:
+        img = image.load_img(img_path, target_size=(img_size, img_size))
+        img = np.expand_dims(img, 0)
+        loaded_images.append(img)
+    loaded_images = np.vstack(loaded_images)
+    preprocessed_images = preprocess_input(loaded_images)
+    return preprocessed_images
+
+
+def compute_loss(ref_img, ref_img_feature, interp, interp_features):
+    interp_l1 = 0
+    interp_loss = 0
+    for k in range(2):  # n
+        interp_l1 += 0.5 * tf.losses.mean_squared_error(ref_img[k], interp[0]) * 1e-5
+        interp_loss += 0.5 * tf.losses.mean_squared_error(ref_img_feature[k], interp_features[0]) * 1e-6
+    return interp_l1, interp_loss
 
 
 def main():
@@ -107,24 +106,56 @@ def main():
     parser.add_argument('--randomize_noise', default=False, help='Add noise to dlatents during optimization', type=bool)
     args, other_args = parser.parse_known_args()
 
-    ref_images = [os.path.join('./data/anime', x) for x in os.listdir('./data/anime')]
+    ref_images = [os.path.join('../stylegan_meta/data/anime', x) for x in os.listdir('../stylegan_meta/data/anime')]
     ref_images = list(filter(os.path.isfile, ref_images))
-
-    print("number of example: {0}".format(len(ref_images)))
 
     os.makedirs('reconst/', exist_ok=True)
     os.makedirs('dlatent/', exist_ok=True)
     os.makedirs('random/', exist_ok=True)
     os.makedirs('interpolation/', exist_ok=True)
 
-    # get pretrained model
+    # Initialize generator and perceptual model
     tflib.init_tf()
     with open('cache/263e666dc20e26dcbfa514733c1d1f81_karras2019stylegan-ffhq-1024x1024.pkl', "rb") as f:
         generator_network, discriminator_network, Gs_network = pickle.load(f)
 
     generator = Generator(Gs_network, args.batch_size, randomize_noise=args.randomize_noise)
-    perceptual_model = PerceptualModel(args.image_size, layer=9, batch_size=args.batch_size)
-    perceptual_model.build_perceptual_model(generator.generated_image)
+    vgg16 = VGG16(include_top=False, input_shape=(256, 256, 3))
+    perceptual_model = Model(vgg16.input, vgg16.layers[9].output)
+
+    generated_image = preprocess_input(tf.image.resize_images(generator.generated_image, (256, 256), method=1))
+    generated_img_features = perceptual_model(generated_image)
+
+    ref = tf.placeholder(dtype=tf.float32, shape=generated_image.shape)
+    interp = tf.placeholder(dtype=tf.float32, shape=generated_image.shape)
+
+    ref_f = tf.placeholder(dtype=tf.float32, shape=generated_img_features.shape)
+    interp_f = tf.placeholder(dtype=tf.float32, shape=generated_img_features.shape)
+
+    ref_loss = tf.losses.mean_squared_error(np.ones(generated_img_features.shape) * ref_f,
+                                             np.ones(generated_img_features.shape) * generated_img_features) / 92890.0
+
+    ref_l1 = tf.losses.mean_squared_error(ref, generated_image) / 5890.0
+
+    interp_l1, interp_loss = compute_loss(ref, ref_f, interp, interp_f)
+    loss = ref_loss + ref_l1 + interp_loss + interp_l1
+    loss2 = ref_loss + ref_l1
+
+    variable = []
+    tvars = tf.trainable_variables()
+    for var in tvars:
+        if "StyleMod" in var.name or 'learnable_dlatents' in var.name:
+            variable.append(var)
+
+    variable2 = []
+    tvars = tf.trainable_variables()
+    for var in tvars:
+        if 'learnable_dlatents' in var.name:
+            variable2.append(var)
+
+    optimizer = tf.train.GradientDescentOptimizer(1.5)
+    min_op = optimizer.minimize(loss, var_list=variable)
+    min_op2 = optimizer.minimize(loss2, var_list=variable2)
 
     epoch = 1
     itere = 1
@@ -132,50 +163,36 @@ def main():
         for images_batch in tqdm(split_to_batches(ref_images, args.batch_size),
                                  total=len(ref_images) // args.batch_size):
             names = [os.path.splitext(os.path.basename(x))[0] for x in images_batch]
-            interp_mask, mask_weight = make_mask(args.batch_size, 2)
-            perceptual_model.set_reference_images(images_batch)
-
-            # vars to be trained
-            variable = []
-            tvars = tf.trainable_variables()
-            for var in tvars:
-                if "StyleMod" in var.name or 'learnable_dlatents' in var.name:
-                    variable.append(var)
+            oref = load_images(images_batch, 256)
+            oref_f = perceptual_model.predict_on_batch(oref)
 
             for i in range(1000):
-                # get interpolated dlatents
-                interpolated_imgs = generator.get_interp(interp_mask, mask_weight)
-                print("now set".format(datetime.datetime.now()))
-                #TODO set interpolated image, this becomes slower as training goes
-                perceptual_model.set_interpolation_images(interpolated_imgs, interp_mask, mask_weight)
-                print("now opt".format(datetime.datetime.now()))
-                #TODO this is slow too, but was fine before adding interpolation loss
-                p_loss, l1, inter_loss, inter_l1 = perceptual_model.optimize(1, variable, learning_rate=args.lr,
-                                                                             interp=True)
-                print("now gen interp".format(datetime.datetime.now()))
-                # ten iteration I examined the loss
-                # Adding interpolation loss makes the original loss harder to opt/original loss goes down very slowly
-                if i % 10 == 0:
+                ointerp = generator.get_interp()
+                ointerp = generator.sess.run(preprocess_input(tf.image.resize_images(ointerp, (256, 256), method=1)))
+                ointerp = ointerp.astype(np.float32)
+                ointerp_f = generator.sess.run(perceptual_model(ointerp))
+                _, p_loss, l1, inter_loss, inter_l1 = generator.sess.run([min_op, ref_loss, ref_l1, interp_loss, interp_l1],
+                                                                      feed_dict={ref:oref, ref_f:oref_f, interp: ointerp, interp_f: ointerp_f})
+                if i % 10 == 0:  
                     print(datetime.datetime.now())
-                    imgs = generator.generate_images()
-                    img = PIL.Image.fromarray(imgs[0], 'RGB')
-                    img.save('reconst/k_{0}.png'.format(i), 'PNG')
-                    print("epoch: {0}, iterations: {1}, loss: {2}, {3}, {4}, {5}, {6}".format(epoch, itere, p_loss, l1,
-                                                                                              inter_loss, inter_l1,
-                                                                                              p_loss + l1 + inter_loss + inter_l1))
+                    print(i, p_loss, l1, inter_loss, inter_l1, sum([p_loss, l1, inter_loss, inter_l1]))
+
             # reconsruction
             dlatents = generator.get_dlatents()
             imgs = generator.generate_images()
-            for i, name in zip(imgs, names):
+            ointerp = generator.get_interp()
+            for i, ii, name in zip(imgs, ointerp, names):
                 img = PIL.Image.fromarray(i, 'RGB')
                 img.save('reconst/{0}.png'.format(name), 'PNG')
+                img = PIL.Image.fromarray(ii, 'RGB')
+                img.save('reconst/{0}_interp.png'.format(name), 'PNG')
             print("reconst done", end="")
             print(datetime.datetime.now())
 
             # random
             d = interpolate(dlatents, 3, args.batch_size)
             imgs = generator.generate_images(d)
-            w3 = truncnorm(-0.3, 0.3).rvs(2 * 18 * 512).astype("float32").reshape(2, 18, 512)
+            w3 = truncnorm(-0.3, 0.3).rvs(args.batch_size * 18 * 512).astype("float32").reshape(args.batch_size, 18, 512)
             for i in imgs:
                 img = PIL.Image.fromarray(i, 'RGB')
                 img.save('random/{0}_inter.png'.format(itere), 'PNG')
@@ -186,17 +203,22 @@ def main():
             print("random done", end="")
             print(datetime.datetime.now())
 
-            # interpolation
+            # interpolationa
             if itere != 1:
-                perceptual_model.set_reference_images(ref_images[:args.batch_size])
+                oref = load_images(ref_images[:args.batch_size], 256)
+                oref_f = perceptual_model.predict_on_batch(oref)
                 generator.reset_dlatents()
-                perceptual_model.optimize(1000, generator.dlatent_variable, learning_rate=args.lr, interp=False)
+                for i in range(1000):
+                    _, loss = generator.sess.run([min_op2, loss2], feed_dict={ref:oref, ref_f:oref_f})
             d1 = generator.get_dlatents()
             print("d1 done", end="")
             print(datetime.datetime.now())
-            perceptual_model.set_reference_images(ref_images[args.batch_size:2 * args.batch_size])
+
+            oref = load_images(ref_images[args.batch_size:2*args.batch_size], 256)
+            oref_f = perceptual_model.predict_on_batch(oref)
             generator.reset_dlatents()
-            perceptual_model.optimize(1000, generator.dlatent_variable, learning_rate=args.lr, interp=False)
+            for i in range(1000):
+                _, loss = generator.sess.run([min_op2, loss2], feed_dict={ref: oref, ref_f: oref_f})
             d2 = generator.get_dlatents()
             print("d2 done", end="")
             print(datetime.datetime.now())
