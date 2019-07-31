@@ -13,6 +13,7 @@ import datetime
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
 from tensorflow.keras.preprocessing import image
+import time
 
 def split_to_batches(l, n):
     for i in range(0, len(l), n):
@@ -37,7 +38,7 @@ def interpolate(dlatents, depth, bs):
             t.append(new_d)
             k -= 1
         res.append(t[-1])
-    res = tf.convert_to_tensor(np.vstack(res))
+    res = tf.reshape(tf.convert_to_tensor(np.vstack(res)), [2, 18, 512])
     return res
 
 
@@ -90,8 +91,6 @@ def compute_loss(ref_img, ref_img_feature, interp, interp_features):
 
 def main():
     parser = argparse.ArgumentParser(description='Find latent representation of reference images using perceptual loss')
-    # parser.add_argument('src_dir', help='Directory with images for encoding')
-
     # for now it's unclear if larger batch leads to better performance/quality
     parser.add_argument('--batch_size', default=2, help='Batch size for generator and perceptual model', type=int)
     parser.add_argument('--max_iteration', default=20000, help='max iterations for loss gd', type=int)
@@ -106,73 +105,76 @@ def main():
     parser.add_argument('--randomize_noise', default=False, help='Add noise to dlatents during optimization', type=bool)
     args, other_args = parser.parse_known_args()
 
-    ref_images = [os.path.join('../stylegan_meta/data/anime', x) for x in os.listdir('../stylegan_meta/data/anime')]
+    src_dir = '../stylegan_meta/data/anime'
+    ref_images = [os.path.join(src_dir, x) for x in os.listdir(src_dir)]
     ref_images = list(filter(os.path.isfile, ref_images))
 
+    # making dirs
     os.makedirs('reconst/', exist_ok=True)
     os.makedirs('dlatent/', exist_ok=True)
     os.makedirs('random/', exist_ok=True)
     os.makedirs('interpolation/', exist_ok=True)
 
     # Initialize generator and perceptual model
-    tflib.init_tf()
+    sess = tflib.init_tf()
     with open('cache/263e666dc20e26dcbfa514733c1d1f81_karras2019stylegan-ffhq-1024x1024.pkl', "rb") as f:
         generator_network, discriminator_network, Gs_network = pickle.load(f)
 
-    generator = Generator(Gs_network, args.batch_size, randomize_noise=args.randomize_noise)
+    # generator
+    generator = Generator(Gs_network, sess, args.batch_size, randomize_noise=args.randomize_noise)
+    # VGG16
     vgg16 = VGG16(include_top=False, input_shape=(256, 256, 3))
     perceptual_model = Model(vgg16.input, vgg16.layers[9].output)
 
+    # image placeholders
     generated_image = preprocess_input(tf.image.resize_images(generator.generated_image, (256, 256), method=1))
     generated_img_features = perceptual_model(generated_image)
-
     ref = tf.placeholder(dtype=tf.float32, shape=generated_image.shape)
-    interp = tf.placeholder(dtype=tf.float32, shape=generated_image.shape)
-
+    interp = tf.placeholder(dtype=tf.float32, shape=(1, 256, 256, 3))
     ref_f = tf.placeholder(dtype=tf.float32, shape=generated_img_features.shape)
-    interp_f = tf.placeholder(dtype=tf.float32, shape=generated_img_features.shape)
+    interp_f = tf.placeholder(dtype=tf.float32, shape=(1, 64,64,256))
 
+    # losses
     ref_loss = tf.losses.mean_squared_error(np.ones(generated_img_features.shape) * ref_f,
                                              np.ones(generated_img_features.shape) * generated_img_features) / 92890.0
-
     ref_l1 = tf.losses.mean_squared_error(ref, generated_image) / 5890.0
-
     interp_l1, interp_loss = compute_loss(ref, ref_f, interp, interp_f)
     loss = ref_loss + ref_l1 + interp_loss + interp_l1
     loss2 = ref_loss + ref_l1
 
+    # variables
     variable = []
     tvars = tf.trainable_variables()
     for var in tvars:
         if "StyleMod" in var.name or 'learnable_dlatents' in var.name:
             variable.append(var)
-
     variable2 = []
     tvars = tf.trainable_variables()
     for var in tvars:
         if 'learnable_dlatents' in var.name:
             variable2.append(var)
 
+    # optimizers
     optimizer = tf.train.GradientDescentOptimizer(1.5)
     min_op = optimizer.minimize(loss, var_list=variable)
     min_op2 = optimizer.minimize(loss2, var_list=variable2)
 
+    # training loop
     epoch = 1
     itere = 1
     while True:
-        for images_batch in tqdm(split_to_batches(ref_images, args.batch_size),
-                                 total=len(ref_images) // args.batch_size):
+        for images_batch in tqdm(split_to_batches(ref_images, args.batch_size), total=len(ref_images) // args.batch_size):
             names = [os.path.splitext(os.path.basename(x))[0] for x in images_batch]
             oref = load_images(images_batch, 256)
             oref_f = perceptual_model.predict_on_batch(oref)
-
             for i in range(1000):
                 ointerp = generator.get_interp()
-                ointerp = generator.sess.run(preprocess_input(tf.image.resize_images(ointerp, (256, 256), method=1)))
-                ointerp = ointerp.astype(np.float32)
-                ointerp_f = generator.sess.run(perceptual_model(ointerp))
-                _, p_loss, l1, inter_loss, inter_l1 = generator.sess.run([min_op, ref_loss, ref_l1, interp_loss, interp_l1],
-                                                                      feed_dict={ref:oref, ref_f:oref_f, interp: ointerp, interp_f: ointerp_f})
+                img = PIL.Image.fromarray(ointerp[0], 'RGB')
+                img = img.resize((256, 256), PIL.Image.BILINEAR)
+                ointerp = np.resize(preprocess_input(np.array(img)), (1, 256, 256, 3))
+                ointerp_f = perceptual_model.predict_on_batch(ointerp)
+                _ = sess.run([min_op],feed_dict={ref:oref, ref_f:oref_f, interp: ointerp, interp_f: ointerp_f})
+                p_loss, l1, inter_loss, inter_l1 = sess.run([ref_loss, ref_l1, interp_loss, interp_l1],feed_dict={ref:oref, ref_f:oref_f, interp: ointerp, interp_f: ointerp_f})
                 if i % 10 == 0:  
                     print(datetime.datetime.now())
                     print(i, p_loss, l1, inter_loss, inter_l1, sum([p_loss, l1, inter_loss, inter_l1]))
