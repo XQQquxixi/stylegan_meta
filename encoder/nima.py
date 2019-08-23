@@ -38,18 +38,17 @@ def compute_nima_loss(image):
 
     nima_loss = tf.identity(10.0 - nima_score, name='nima_loss')
     return nima_loss
-  
+
 def load_image(filename):
     image = np.array(Image.open(filename).convert("RGB"), dtype=np.float32)
     image = np.expand_dims(image, axis=0)
     return image
-  
-content_image = load_image('../the_starry_night-t2.jpg')
 
-with tf.Session() as sess:
-    transfer_image = tf.Variable(content_image)
+def nima_reg(path):
+    imgs = load_images(path)
+    transfer_image = tf.Variable(imgs)
     transfer_image_vgg = vgg.preprocess(transfer_image)
     transfer_image_nima = nima.preprocess(transfer_image)
     nima_loss = compute_nima_loss(transfer_image_nima)
-    #nima_loss =  * nima_loss
-    print sess.run(nima_loss)
+    with tf.Session() as sess:
+        return sess.run(nima_loss)
