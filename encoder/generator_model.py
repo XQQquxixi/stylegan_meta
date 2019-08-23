@@ -16,7 +16,7 @@ def create_variable_for_generator(name, batch_size):
 
 
 class Generator:
-    def __init__(self, model, batch_size, randomize_noise=False):
+    def __init__(self, model, sess, batch_size, randomize_noise=False):
         self.batch_size = batch_size
         self.model = model
         self.mapping = self.model.components.mapping
@@ -25,11 +25,11 @@ class Generator:
         self.initial_dlatents = np.zeros((self.batch_size, 18, 512))
         self.synthesis.run(self.initial_dlatents,
                            randomize_noise=randomize_noise, minibatch_size=self.batch_size,
-                           custom_inputs=[partial(create_variable_for_generator, batch_size=batch_size),
+                           custom_inputs=[partial(create_variable_for_generator, batch_siz$
                                           partial(create_stub, batch_size=batch_size)],
                            structure='fixed')
 
-        self.sess = tf.get_default_session()
+        self.sess = sess
         self.graph = tf.get_default_graph()
 
         self.dlatent_variable = next(v for v in tf.global_variables() if 'learnable_dlatents' in v.name)
