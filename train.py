@@ -6,6 +6,7 @@ import PIL.Image
 import numpy as np
 import dnnlib.tflib as tflib
 from encoder.generator_model import Generator
+from encoder.nima import nima_reg
 import tensorflow as tf
 import random
 from scipy.stats import truncnorm
@@ -139,8 +140,9 @@ def main():
                                              np.ones(generated_img_features.shape) * generated_img_features) / 92890.0
     ref_l1 = tf.losses.mean_squared_error(ref, generated_image) / 5890.0
     interp_l1, interp_loss = compute_loss(ref, ref_f, interp, interp_f)
-    loss = ref_loss + ref_l1 + interp_loss + interp_l1
-    loss2 = ref_loss + ref_l1
+    nima_loss = tf.math.abs(nima_reg(ref[0]) + nima_reg(ref[1])) / 2. - nima_reg(interp[0])) / 1.5
+    loss = ref_loss + ref_l1 + interp_loss + interp_l1 + nima_loss
+    loss2 = ref_loss + ref_l1 + nima_loss
 
     # variables
     variable = []
