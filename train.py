@@ -142,7 +142,7 @@ def main():
     interp_l1, interp_loss = compute_loss(ref, ref_f, interp, interp_f)
     nima_loss = tf.math.abs(nima_reg(ref[0]) + nima_reg(ref[1])) / 2. - nima_reg(interp[0])) / 1.5
     loss = ref_loss + ref_l1 + interp_loss + interp_l1 + nima_loss
-    loss2 = ref_loss + ref_l1 + nima_loss
+    loss2 = ref_loss + ref_l1
 
     # variables
     variable = []
