@@ -25,7 +25,7 @@ class Generator:
         self.initial_dlatents = np.zeros((self.batch_size, 18, 512))
         self.synthesis.run(self.initial_dlatents,
                            randomize_noise=randomize_noise, minibatch_size=self.batch_size,
-                           custom_inputs=[partial(create_variable_for_generator, batch_siz$
+                           custom_inputs=[partial(create_variable_for_generator, batch_size=batch_size),
                                           partial(create_stub, batch_size=batch_size)],
                            structure='fixed')
 
