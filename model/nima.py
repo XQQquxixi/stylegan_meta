@@ -2,7 +2,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-import encoder.vgg19 as vgg
+import model.vgg19 as vgg
 from keras.applications.inception_resnet_v2 import InceptionResNetV2
 from keras.layers import Dense, Dropout
 from keras.models import Model
@@ -14,7 +14,7 @@ def get_nima_model(input=None):
                                    x = Dense(10, activation='softmax')(x)
                                    
                                    model = Model(base_model.input, x)
-                                   model.load_weights('encoder/inception_resnet_weights.h5')
+                                   model.load_weights('model/inception_resnet_weights.h5')
                                    return model
 
 
