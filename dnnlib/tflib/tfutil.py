@@ -117,7 +117,7 @@ def init_tf(config_dict: dict = None) -> None:
 
     # Create default TensorFlow session.
     create_session(cfg, force_as_default=True)
-    return tf.get_default_session()
+    return tf.get_default_session()
 
 
 def assert_tf_initialized():
