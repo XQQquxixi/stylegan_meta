@@ -53,7 +53,16 @@ class Generator:
         if dlatents is not None:
             self.set_dlatents(dlatents)
         return self.sess.run(self.generated_image_uint8)
+                                          
+    def get_interp(self):
+        d = self.get_dlatents()
+        # n, 18, 512
+        interp_d = np.tile(np.mean(d, axis=0).reshape((1, 18, 512)), (2, 1, 1)).reshape((2, 18, 512))
+        imgs = self.generate_images(interp_d)
+        self.set_dlatents(d)
+        return imgs
 
+    """
     def get_interp(self, interp_mask, mask_weight):
         """get the interpolated images"""
         d = self.get_dlatents()

@@ -1,4 +1,4 @@
-﻿# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # This work is licensed under the Creative Commons Attribution-NonCommercial
 # 4.0 International License. To view a copy of this license, visit
@@ -95,7 +95,7 @@ def init_tf(config_dict: dict = None) -> None:
     """Initialize TensorFlow session using good default settings."""
     # Skip if already initialized.
     if tf.get_default_session() is not None:
-        return
+        return tf.get_default_session()
 
     # Setup config dict and random seeds.
     cfg = _sanitize_tf_config(config_dict)
@@ -117,6 +117,7 @@ def init_tf(config_dict: dict = None) -> None:
 
     # Create default TensorFlow session.
     create_session(cfg, force_as_default=True)
+    return tf.get_default_session()
 
 
 def assert_tf_initialized():

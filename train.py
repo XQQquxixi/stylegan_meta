@@ -136,11 +136,10 @@ def main():
     interp_f = tf.placeholder(dtype=tf.float32, shape=(1, 64,64,256))
 
     # losses
-    ref_loss = tf.losses.mean_squared_error(np.ones(generated_img_features.shape) * ref_f,
-                                             np.ones(generated_img_features.shape) * generated_img_features) / 92890.0
+    ref_loss = tf.losses.mean_squared_error(np.ones(generated_img_features.shape) * ref_f,np.ones(generated_img_features.shape) * generated_img_features) / 92890.0
     ref_l1 = tf.losses.mean_squared_error(ref, generated_image) / 5890.0
     interp_l1, interp_loss = compute_loss(ref, ref_f, interp, interp_f)
-    nima_loss = tf.math.abs(nima_reg(ref[0]) + nima_reg(ref[1])) / 2. - nima_reg(interp[0])) / 1.5
+    nima_loss = (tf.math.abs(nima_reg(ref[0]) + nima_reg(ref[1]) / 2. - nima_reg(interp[0]))) / 1.5
     loss = ref_loss + ref_l1 + interp_loss + interp_l1 + nima_loss
     loss2 = ref_loss + ref_l1
 
@@ -161,80 +160,80 @@ def main():
     min_op = optimizer.minimize(loss, var_list=variable)
     min_op2 = optimizer.minimize(loss2, var_list=variable2)
 
+    #saver
+    saver = tf.train.Saver()
+
     # training loop
     epoch = 1
     itere = 1
     while True:
+        random.shuffle(ref_images)
         for images_batch in tqdm(split_to_batches(ref_images, args.batch_size), total=len(ref_images) // args.batch_size):
             names = [os.path.splitext(os.path.basename(x))[0] for x in images_batch]
+            full_names = ["{0}{1}.png".format(src_dir, x) for x in names]
             oref = load_images(images_batch, 256)
             oref_f = perceptual_model.predict_on_batch(oref)
-            for i in range(1000):
+            for i in range(2000):
                 ointerp = generator.get_interp()
                 img = PIL.Image.fromarray(ointerp[0], 'RGB')
                 img = img.resize((256, 256), PIL.Image.BILINEAR)
                 ointerp = np.resize(preprocess_input(np.array(img)), (1, 256, 256, 3))
                 ointerp_f = perceptual_model.predict_on_batch(ointerp)
                 _ = sess.run([min_op],feed_dict={ref:oref, ref_f:oref_f, interp: ointerp, interp_f: ointerp_f})
-                p_loss, l1, inter_loss, inter_l1 = sess.run([ref_loss, ref_l1, interp_loss, interp_l1],feed_dict={ref:oref, ref_f:oref_f, interp: ointerp, interp_f: ointerp_f})
-                if i % 10 == 0:  
-                    print(datetime.datetime.now())
-                    print(i, p_loss, l1, inter_loss, inter_l1, sum([p_loss, l1, inter_loss, inter_l1]))
-
-            # reconsruction
-            dlatents = generator.get_dlatents()
-            imgs = generator.generate_images()
-            ointerp = generator.get_interp()
-            for i, ii, name in zip(imgs, ointerp, names):
-                img = PIL.Image.fromarray(i, 'RGB')
-                img.save('reconst/{0}.png'.format(name), 'PNG')
-                img = PIL.Image.fromarray(ii, 'RGB')
-                img.save('reconst/{0}_interp.png'.format(name), 'PNG')
-            print("reconst done", end="")
-            print(datetime.datetime.now())
-
-            # random
-            d = interpolate(dlatents, 3, args.batch_size)
-            imgs = generator.generate_images(d)
-            w3 = truncnorm(-0.3, 0.3).rvs(args.batch_size * 18 * 512).astype("float32").reshape(args.batch_size, 18, 512)
-            for i in imgs:
-                img = PIL.Image.fromarray(i, 'RGB')
-                img.save('random/{0}_inter.png'.format(itere), 'PNG')
-
-            rand_img1 = generator.generate_images(w3)
-            img1 = PIL.Image.fromarray(rand_img1[0], 'RGB')
-            img1.save('random/{0}_w.png'.format(itere), 'PNG')
-            print("random done", end="")
-            print(datetime.datetime.now())
-
-            # interpolationa
-            if itere != 1:
-                oref = load_images(ref_images[:args.batch_size], 256)
-                oref_f = perceptual_model.predict_on_batch(oref)
-                generator.reset_dlatents()
-                for i in range(1000):
-                    _, loss = generator.sess.run([min_op2, loss2], feed_dict={ref:oref, ref_f:oref_f})
-            d1 = generator.get_dlatents()
-            print("d1 done", end="")
-            print(datetime.datetime.now())
-
-            oref = load_images(ref_images[args.batch_size:2*args.batch_size], 256)
-            oref_f = perceptual_model.predict_on_batch(oref)
-            generator.reset_dlatents()
-            for i in range(1000):
-                _, loss = generator.sess.run([min_op2, loss2], feed_dict={ref: oref, ref_f: oref_f})
-            d2 = generator.get_dlatents()
-            print("d2 done", end="")
-            print(datetime.datetime.now())
-            d = interpolation(d1, d2)
-            im_list = []
-            for i in range(6):
+                
+                # reconsruction
+                dlatents = generator.get_dlatents()
+                ointerp = generator.get_interp()
+                img = PIL.Image.fromarray(ointerp[0], 'RGB')
+                img.save('reconst/{0}_interp.png'.format(itere), 'PNG')
+                
+                # dlatents
+                np.save('dlatent/{0}.npy'.format(names[0]), dlatents[0])
+                np.save('dlatent/{0}.npy'.format(names[1]), dlatents[1])
+                
+                # interpolation
+                d = dlatents
+                m = interpolation(d[0], d[1])
+                d = [np.tile(np.reshape(np.array(x), (1, 18, 512)), [2, 1, 1]) for x in m]
+                im_list = []
+                for i in range(6):
                 img = PIL.Image.fromarray(generator.generate_images(d[i])[0], 'RGB')
                 im_list.append(img)
-            combine(im_list, 'interpolation/{0}.png'.format(itere))
+                combine(im_list, 'interpolation/{0}.png'.format(itere))
 
-            itere += 1
-            generator.reset_dlatents()
+                # random
+                if itere > 40:
+                    oref = load_images(ref_images[3:5], 256)
+                    oref_f = perceptual_model.predict_on_batch(oref)
+                    generator.reset_dlatents()
+                    for i in range(1500):
+                        _ = generator.sess.run([min_op2], feed_dict={ref:oref, ref_f:oref_f})
+                    d = generator.get_dlatents()
+                    dlatents += d
+                    d = interpolate(dlatents, 5, args.batch_size)
+                    imgs = generator.generate_images(d)
+                    w0 = truncnorm(-0.2, 0.2).rvs(args.batch_size * 18 * 512).astype("float32").reshape(args.batch_size, 18, 512)
+                    w1 = truncnorm(-0.35, 0.35).rvs(args.batch_size * 18 * 512).astype("float32").reshape(args.batch_size, 18, 512)
+                    #w3 = truncnorm(-0.5, 0.5).rvs(args.batch_size * 18 * 512).astype("float32").reshape(args.batch_size, 18, 512)
+                    for i in imgs:
+                        img = PIL.Image.fromarray(i, 'RGB')
+                        img.save('random/{0}_inter.png'.format(itere), 'PNG')
+                    
+                    #rand_img1 = generator.generate_images(w3)
+                    rand_img2 = generator.generate_images(w1)
+                    rand_img3 = generator.generate_images(w0)
+                    #img1 = PIL.Image.fromarray(rand_img1[0], 'RGB')
+                    #img1.save('random/{0}_w3.png'.format(itere), 'PNG')
+                    img1 = PIL.Image.fromarray(rand_img2[0], 'RGB')
+                    img1.save('random/{0}_w1.png'.format(itere), 'PNG')
+                    img1 = PIL.Image.fromarray(rand_img3[0], 'RGB')
+                    img1.save('random/{0}_w0.png'.format(itere), 'PNG')
+        
+                if itere % 100 == 0:
+                    saver.save(sess, 'saver_a/m.ckpt')
+                itere += 1
+                generator.reset_dlatents()
+                
         if itere > args.max_iteration:
             break
         epoch += 1
