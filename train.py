@@ -39,7 +39,7 @@ def interpolate(dlatents, depth, bs):
             t.append(new_d)
             k -= 1
         res.append(t[-1])
-    res = tf.reshape(tf.convert_to_tensor(np.vstack(res)), [2, 18, 512])
+    res =np.reshape(np.vstack(res), (2, 18, 512))
     return res
 
 
