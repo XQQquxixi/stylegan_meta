@@ -21,19 +21,19 @@ To enforce the third term i.e. the interpolation loss, there are a few ways we c
 
 # Results
 These results are form implementation of the (3) in above, with simply $L_per$ and $L_1$, using 50 training examples.
-interpolation results:\\
-\includegraphics[scale=0.06]{22.png}
-\includegraphics[scale=0.06]{43.png}
-\includegraphics[scale=0.06]{59.png}
-\includegraphics[scale=0.06]{82.png}
-\includegraphics[scale=0.06]{6.png}
-\includegraphics[scale=0.06]{58.png}
-\includegraphics[scale=0.06]{50.png}
-interpolation without interpolation loss:\\
-\includegraphics[scale=0.06]{7.png}
-\includegraphics[scale=0.06]{k.png}\\
-interpolation sampling results (depth one, too little depth so not very meaningful):\\
-\includegraphics[scale=0.1]{80_inter.png}
+### interpolation results:
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/22.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/43.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/59.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/82.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/6.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/58.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/50.png)
+### interpolation without interpolation loss:
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/7.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/without_inter.png)
+### interpolation sampling results (depth one):
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/80.png)
 \includegraphics[scale=0.1]{89_inter.png}\\
 random sampling results:\\
 \includegraphics[scale=0.1]{81_w.png}
