@@ -24,23 +24,27 @@ To enforce the third term i.e. the interpolation loss, there are a few ways we c
 # Results
 These results are form implementation of the (3) in above, with simply $L_per$ and $L_1$, using 50 training examples.
 ### interpolation results:
-![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/13.png)
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/22.png)
-![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/43.png)
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/59.png)
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/82.png)
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/50.png)
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/75.png)
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/70.png)
-![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/6.png)
-### interpolation without interpolation loss:
+### The importance of interpolation loss:
+First two rows are interpolations without interpolation loss defined above, last two rows are with:
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/7.png)
 ![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/without_inter.png)
-### interpolation without AdaIn:
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/6.png)
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/43.png)
+### The importance of updating AdaIn:
+This is interpolation result without updating AdaIn parameters, first and last pictures represents reconstructions of two pictures, getting from Style-GAN trained from human face dataset, similar to what ***Image2StyleGAN*** has shown, the reconstruction is super good but the embedding of flower picture is not meaningful, actually the model "overfits" to human faces:
 ![](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/without_addin.png)
-### interpolation sampling results (depth one, first two) and random sampling results (following three):
+This is interpolation result from our model, now the interpolation is quite smooth:
+![alt text](https://github.com/XQQquxixi/stylegan_meta/blob/master/images/13.png)
+
+### Interpolation sampling results (depth one, first two) and random sampling results (following three):
 <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/80_inter.png" width="150" height="150">  <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/89_inter.png" width="150" height="150"> <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/159_w0.png" width="150" height="150"> <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/81_w.png" width="150" height="150"> <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/86_w.png" width="150" height="150"> 
-### random results for flowers:
+### Random results for flowers:
 <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/210_w1.png" width="150" height="150">  <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/211_w1.png" width="150" height="150"> <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/497_w1.png" width="150" height="150"> <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/35_0.png" width="150" height="150">  <img src="https://github.com/XQQquxixi/stylegan_meta/blob/master/images/216_w3.png" width="150" height="150"> 
 
 
